@@ -18,4 +18,14 @@ class Link < Post
 
     return [time_string, @url, @text]
   end
+
+  # Переопределение метода Супер-класса
+  def to_db_hash
+    return super.merge(
+                    {
+                        'text' => @text,
+                        'url' => @url
+                    }
+    )
+  end
 end
