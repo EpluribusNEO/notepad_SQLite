@@ -9,10 +9,62 @@ class Post
 
   def self.post_type
     {'Memo' =>Memo, 'Link'=>Link, 'Task'=>Task}
+
   end
 
   def self.create(type)
     return post_type[type].new
+  end
+
+  def self.find(limit, type, id)
+    db = SQLite3::Database.open(@@SQLITE_DB_FILE)
+
+    # Выгрузка по id
+    if !id.nil?
+      db.results_as_hash = true
+      # ? --"ПлэйсХолдер". Вместо ? подставится id
+      result = db.execute("SELECT * FROM posts WHERE post_id = ?", id)
+
+      # execute возвращает Массивы
+      # если результат массив, то в result запишеп первый элемент массива
+      result = result[0] if result.is_a? Array
+
+      db.close
+
+      if result.empty?
+        puts "Запись с id:#{id} не найдена"
+        return nil
+      else
+        post = create(result['type'])
+        post.load_data(result)
+
+        return post
+      end
+
+    else
+      #иначе вывести таблицу
+      db.results_as_hash = false
+
+      query = "SELECT * FROM posts "
+      query += "WHERE type = :type " unless type.nil? # Выполнить если тип не пуст. :type -плэйсХолдер
+      query += "ORDER BY post_id DESC " #Отсортировать по убываний, свежие записи вперёд...
+      query +=  "LIMIT :limit " unless limit.nil? #лимит, сколько записей вернуть
+
+      statement = db.prepare(query) #получает строку и готовит запрас к выполнению
+                                    #statement объект готовый к выполнению
+                                    #к объекту можно подключать параметры используя именнованные плэйсХолдеры
+
+      #к подготовленному параметру выражения добавляем, аргументы ('имя_плэйсХолдера', аргумент)
+      statement.bind_param('type', type) unless type.nil?
+      statement.bind_param('limit', limit) unless limit.nil?
+
+      result = statement.execute! # execute! вернёт массив результатов. Массив содержаий массивы с полями
+
+      statement.close
+      db.close
+
+      return result
+    end
   end
 
   def initialize
@@ -53,7 +105,7 @@ class Post
 
   # ---------------------------------------------------------------------------
   def get_time_string
-    "[Создано: #{@created_at.strftime("%Y.%m.%d, %H:%M:%S")}] \n\r\n\r"
+    "[Создано: #{@created_at.strftime("%Y.%m.%d, %H:%M:%S")} \n\r\n\r"
   end
 
   #============================================================================
@@ -84,6 +136,16 @@ class Post
         'type' => self.class.name,
         'created_at' => @created_at.to_s
     }
+  end
+
+  def load_data(data_hash)
+    @created_at = Time.parse(data_hash['created_at'])
+  end
+
+  def delete_row_by_id(id)
+    db = SQLite3::Database.open(@@SQLITE_DB_FILE)
+    db.execute("DELETE * FROM posts WHERE post_id = ?", id)
+    db.close
   end
 
 end
